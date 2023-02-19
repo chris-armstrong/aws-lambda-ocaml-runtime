@@ -31,7 +31,6 @@
  *---------------------------------------------------------------------------*)
 
 open Lwt.Infix
-module Piaf = Piaf_lwt
 
 module Make
     (Event : Runtime_intf.LambdaEvent)
@@ -142,7 +141,7 @@ struct
           start runtime )
 
   let start_with_runtime_endpoint ~lift handler function_config endpoint =
-    Client.make endpoint >>= function
+    (Client.make endpoint |> Lwt_result.catch) >>= function
     | Ok client ->
       let runtime =
         make ~max_retries:3 ~settings:function_config ~lift ~handler client
@@ -150,7 +149,7 @@ struct
       start runtime
     | Error e ->
       failwith
-        (Format.asprintf "Could not start HTTP client: %a" Piaf.Error.pp_hum e)
+        (Format.asprintf "Could not start HTTP client: %a" Fmt.exn e)
 
   let start_lambda ~lift handler =
     match Config.get_runtime_api_endpoint () with

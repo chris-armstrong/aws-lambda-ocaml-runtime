@@ -31,7 +31,6 @@
  *---------------------------------------------------------------------------*)
 
 open Lwt.Infix
-module Piaf = Piaf_lwt
 
 module Constants = struct
   let runtime_api_version = "2018-06-01"
@@ -111,41 +110,39 @@ type event_context =
     identity : cognito_identity option
   }
 
-type t = Piaf.Client.t
+type t = { ctx: Cohttp_lwt_unix.Client.ctx; uri: Uri.t }
 
 let make endpoint =
   let uri = Uri.of_string (Format.asprintf "http://%s" endpoint) in
-  Piaf.Client.create uri >|= function
-  | Ok connection ->
-    Ok connection
-  | Error msg ->
-    Error msg
+  Lwt.return { ctx= Cohttp_lwt_unix.Net.default_ctx; uri }
 
 let make_runtime_post_request client path output =
   let body = Yojson.Safe.to_string output in
-  Piaf.Client.post
-    client
-    ~headers:[ "Content-Type", Constants.api_content_type ]
-    ~body:(Piaf.Body.of_string body)
-    path
+  let uri = Uri.with_path client.uri path in
+  Cohttp_lwt_unix.Client.call ~ctx:client.ctx
+    ~headers:(Cohttp.Header.of_list[ "Content-Type", Constants.api_content_type ])
+    ~body:(Cohttp_lwt.Body.of_string body)
+    (`POST)
+    uri
 
 let event_response client request_id output =
-  let open Piaf in
+  let open Cohttp in
   let path =
     Format.asprintf
       "/%s/runtime/invocation/%s/response"
       Constants.runtime_api_version
       request_id
   in
-  make_runtime_post_request client path output >>= function
-  | Ok { Response.status; _ } ->
-    if not (Status.is_successful status) then
+  (make_runtime_post_request client path output |> Lwt_result.catch) >>= function
+  | Ok (response, _) ->
+    let status = response |> Cohttp_lwt_unix.Response.status |> Code.code_of_status in
+    if not (Code.is_success status) then
       let error =
         Errors.make_api_error
           ~recoverable:false
           (Printf.sprintf
              "Error %d while sending response"
-             (Status.to_code status))
+             status)
       in
       Lwt_result.fail error
     else
@@ -161,34 +158,36 @@ let event_response client request_id output =
     Lwt_result.fail err
 
 let make_runtime_error_request connection path error =
-  let open Piaf in
+  let open Cohttp in
   let body = Errors.to_lambda_error error |> Yojson.Safe.to_string in
-  Client.post
-    connection
+  let uri = Uri.with_path connection.uri path in
+  Cohttp_lwt_unix.Client.post
+    ~ctx:connection.ctx
     ~headers:
-      [ "Content-Type", Constants.api_error_content_type
+      (Header.of_list [ "Content-Type", Constants.api_error_content_type
       ; Constants.runtime_error_header, "RuntimeError"
-      ]
-    ~body:(Body.of_string body)
-    path
+      ])
+    ~body:(Cohttp_lwt.Body.of_string body)
+    uri
 
 let event_error client request_id err =
-  let open Piaf in
+  let open Cohttp in
   let path =
     Format.asprintf
       "/%s/runtime/invocation/%s/error"
       Constants.runtime_api_version
       request_id
   in
-  make_runtime_error_request client path err >>= function
-  | Ok { Response.status; _ } ->
-    if not (Status.is_successful status) then
+  (make_runtime_error_request client path err |> Lwt_result.catch) >>= function
+  | Ok (response, _) ->
+    let status = response |> Cohttp_lwt.Response.status |> Code.code_of_status in
+    if not (Code.is_success status) then
       let error =
         Errors.make_api_error
           ~recoverable:true
           (Printf.sprintf
              "Error %d while sending response"
-             (Status.to_code status))
+             status)
       in
       Lwt_result.fail error
     else
@@ -207,7 +206,7 @@ let fail_init client err =
   let path =
     Format.asprintf "/%s/runtime/init/error" Constants.runtime_api_version
   in
-  make_runtime_error_request client path err >>= function
+  (make_runtime_error_request client path err |> Lwt_result.catch) >>= function
   | Ok _ ->
     Lwt_result.return ()
   (* TODO: do we wanna "failwith" or just raise and then have a generic
@@ -216,7 +215,7 @@ let fail_init client err =
     failwith "Error while sending init failed message"
 
 let get_event_context headers =
-  let open Piaf in
+  let open Cohttp in
   let report_error header =
     let err =
       Errors.make_api_error
@@ -226,21 +225,21 @@ let get_event_context headers =
     Error err
   in
   let open Constants in
-  match Headers.get headers RequestHeaders.request_id with
+  match Header.get headers RequestHeaders.request_id with
   | None ->
     report_error RequestHeaders.request_id
   | Some aws_request_id ->
-    (match Headers.get headers RequestHeaders.function_arn with
+    (match Header.get headers RequestHeaders.function_arn with
     | None ->
       report_error RequestHeaders.function_arn
     | Some invoked_function_arn ->
-      (match Headers.get headers RequestHeaders.deadline with
+      (match Header.get headers RequestHeaders.deadline with
       | None ->
         report_error RequestHeaders.deadline
       | Some deadline_str ->
         let deadline = Int64.of_string deadline_str in
         let client_context =
-          match Headers.get headers RequestHeaders.client_context with
+          match Header.get headers RequestHeaders.client_context with
           | None ->
             None
           | Some ctx_json_str ->
@@ -252,7 +251,7 @@ let get_event_context headers =
               Some client_ctx)
         in
         let identity =
-          match Headers.get headers RequestHeaders.cognito_identity with
+          match Header.get headers RequestHeaders.cognito_identity with
           | None ->
             None
           | Some cognito_json_str ->
@@ -266,7 +265,7 @@ let get_event_context headers =
         let ctx =
           { aws_request_id
           ; invoked_function_arn
-          ; xray_trace_id = Headers.get headers RequestHeaders.trace_id
+          ; xray_trace_id = Header.get headers RequestHeaders.trace_id
           ; deadline
           ; client_context
           ; identity
@@ -275,32 +274,33 @@ let get_event_context headers =
         Ok ctx))
 
 let next_event client =
-  let open Piaf in
+  let open Cohttp in
   let path =
     Format.asprintf "/%s/runtime/invocation/next" Constants.runtime_api_version
   in
+  let uri = Uri.with_path client.uri path in
   Logs_lwt.info (fun m -> m "Polling for next event. Path: %s\n" path)
   >>= fun () ->
-  Client.get client path >>= function
-  | Ok { Response.status; headers; body; _ } ->
-    let code = Status.to_code status in
-    if Status.is_client_error status then
+  (Cohttp_lwt_unix.Client.get ~ctx:client.ctx uri |> Lwt_result.catch) >>= function
+  | Ok (response, body) ->
+    let status = response |> Cohttp_lwt.Response.status |> Code.code_of_status in
+    if Code.is_client_error status then
       Logs_lwt.err (fun m ->
           m
             "Runtime API returned client error when polling for new events %d\n"
-            code)
+            status)
       >>= fun () ->
       let err =
         Errors.make_api_error
           ~recoverable:true
-          (Printf.sprintf "Error %d when polling for events" code)
+          (Printf.sprintf "HTTP Error %d when polling for events" status)
       in
       Lwt_result.fail err
-    else if Status.is_server_error status then
+    else if Code.is_server_error status then
       Logs_lwt.err (fun m ->
           m
-            "Runtime API returned server error when polling for new events %d\n"
-            code)
+            "Runtime API returned HTTP server error when polling for new events %d\n"
+            status)
       >>= fun () ->
       let err =
         Errors.make_api_error
@@ -309,13 +309,14 @@ let next_event client =
       in
       Lwt_result.fail err
     else (
+      let headers = response |> Response.headers in
       match get_event_context headers with
       | Error err ->
         Logs_lwt.err (fun m ->
             m "Failed to get event context: %s\n" (Errors.message err))
         >>= fun () -> Lwt_result.fail err
       | Ok ctx ->
-        Body.to_string body >>= ( function
+        (Cohttp_lwt.Body.to_string body |> Lwt_result.catch) >>= ( function
         | Ok body_str ->
           Lwt_result.return (body_str, ctx)
         | Error e ->
@@ -324,7 +325,7 @@ let next_event client =
               ~recoverable:false
               (Format.asprintf
                  "Server error when polling for new events: %a"
-                 Piaf.Error.pp_hum
+                 Fmt.exn
                  e)
           in
           Lwt_result.fail err ))

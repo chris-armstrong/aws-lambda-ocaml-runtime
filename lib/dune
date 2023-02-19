@@ -12,5 +12,6 @@
   logs.lwt
   lwt
   lwt.unix
-  piaf-lwt
+  cohttp
+  cohttp-lwt-unix
   result))
