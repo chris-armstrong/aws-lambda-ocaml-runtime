@@ -12,7 +12,7 @@ depends: [
   "ocaml" {>= "4.08"}
   "dune" {>= "1.7"}
   "result"
-  "yojson" {>= "1.6.0" & < "2.0.0"}
+  "yojson" 
   "ppx_deriving_yojson"
   "uri"
   "logs"
