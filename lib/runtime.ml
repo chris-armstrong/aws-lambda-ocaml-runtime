@@ -67,7 +67,9 @@ let json_parse x = try
     | _ ->
       Client.next_event runtime.client >>= ( function
       | Ok (ev_data, invocation_ctx) ->
-        (match ev_data |> json_parse |> (Result.map Event.of_yojson) with
+        let json = ev_data |> json_parse in
+        let event = Result.bind json Event.of_yojson in
+        (match event with
         | Ok ev ->
           let handler_ctx =
             Context.make
