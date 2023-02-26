@@ -36,4 +36,5 @@ module StringMap = Util.StringMap
 module Make = Runtime.Make
 module Json = Json
 module Http = Http
+module Http2 = Http2
 include Runtime_intf
