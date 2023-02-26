@@ -14,7 +14,6 @@ depends: [
   "result"
   "yojson" {>= "1.6.0" & < "2.0.0"}
   "ppx_deriving_yojson"
-  "piaf"
   "uri"
   "logs"
   "lwt"
