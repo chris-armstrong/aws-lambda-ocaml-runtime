@@ -68,7 +68,7 @@ type api_gateway_proxy_request_context = {
   route_key : string; [@key "routeKey"]
   time : string;
   time_epoch : int;
-  authorizer : api_gateway_proxy_request_context_authorizer option;
+  authorizer : api_gateway_proxy_request_context_authorizer option [@default None];
 }
 [@@deriving of_yojson { strict = false }]
 
@@ -76,7 +76,7 @@ type api_gateway_proxy_request = {
   version : string;
   route_key : string; [@key "routeKey"]
   raw_query_string : string; [@key "rawQueryString"]
-  cookies : string list option;
+  cookies : string list option [@default None];
   headers : string StringMap.t;
   query_string_parameters : string StringMap.t;
       [@key "queryStringParameters"] [@default StringMap.empty]
