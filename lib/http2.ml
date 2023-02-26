@@ -67,7 +67,7 @@ type api_gateway_proxy_request_context = {
   request_id : string; [@key "requestId"]
   route_key : string; [@key "routeKey"]
   time : string;
-  time_epoch : int;
+  time_epoch : int64;
   authorizer : api_gateway_proxy_request_context_authorizer option [@default None];
 }
 [@@deriving of_yojson { strict = false }]
