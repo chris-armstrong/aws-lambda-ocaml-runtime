@@ -22,7 +22,6 @@ depends: [
   "cohttp-lwt-unix"
   "bigarray-compat"
   "bigstringaf"
-  "logs.lwt"
 ]
 synopsis:
   "A custom runtime for AWS Lambda written in OCaml"
