@@ -44,6 +44,10 @@ struct
     ; lift : 'a -> (Response.t, string) result Lwt.t
     }
 
+let json_parse x = try
+  Ok (Yojson.Safe.from_string x) with
+  Yojson.Json_error e -> Error e
+
   let make ~handler ~max_retries ~settings ~lift client =
     { client; settings; max_retries; handler; lift }
 
@@ -63,7 +67,7 @@ struct
     | _ ->
       Client.next_event runtime.client >>= ( function
       | Ok (ev_data, invocation_ctx) ->
-        (match ev_data |> Yojson.Safe.from_string |> Event.of_yojson with
+        (match ev_data |> json_parse |> (Result.map Event.of_yojson) with
         | Ok ev ->
           let handler_ctx =
             Context.make
