@@ -81,7 +81,7 @@ type api_gateway_proxy_request = {
   query_string_parameters : string StringMap.t;
       [@key "queryStringParameters"] [@default StringMap.empty]
   request_context : api_gateway_proxy_request_context; [@key "requestContext"]
-  body : string option;
+  body : string option [@default None];
   path_parameters : string StringMap.t;
       [@key "pathParameters"] [@default StringMap.empty]
   is_base64_encoded : bool; [@key "isBase64Encoded"]
