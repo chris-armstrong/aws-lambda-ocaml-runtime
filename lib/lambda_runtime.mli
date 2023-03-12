@@ -198,7 +198,7 @@ module Http2 : sig
     request_id : string; [@key "requestId"]
     route_key : string; [@key "routeKey"]
     time : string;
-    time_epoch : int64;
+    time_epoch : int64 [@key "timeEpoch"];
     authorizer : api_gateway_proxy_request_context_authorizer option;
   }
 
