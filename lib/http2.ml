@@ -34,7 +34,7 @@
 open Util
 
 type api_gateway_proxy_request_context_http = {
-  method_ : string;
+  method_ : string [@key "method"];
   path : string;
   protocol : string;
   source_ip : string; [@key "sourceIp"]
