@@ -62,7 +62,7 @@ type api_gateway_proxy_request_context = {
   domain_name : string; [@key "domainName"]
   domain_prefix : string; [@key "domainPrefix"]
   http : api_gateway_proxy_request_context_http;
-  resource_id : string; [@key "resourceId"]
+  resource_id : string option; [@key "resourceId"] [@default None]
   stage : string;
   request_id : string; [@key "requestId"]
   route_key : string; [@key "routeKey"]

@@ -138,6 +138,7 @@ module Http : sig
     api_id : string;  (** The API Gateway REST API ID *)
   }
 
+  (* A request to API Gateway using the proxy integration *)
   type api_gateway_proxy_request = {
     resource : string;
     path : string;
@@ -171,8 +172,8 @@ module Http2 : sig
     method_ : string;
     path : string;
     protocol : string;
-    source_ip : string; [@key "sourceIp"]
-    user_agent : string; [@key "userAgent"]
+    source_ip : string;
+    user_agent : string;
   }
 
   type api_gateway_request_context_jwt = {
@@ -188,42 +189,44 @@ module Http2 : sig
    * account and resources invoking the Lambda function. It also includes Cognito
    * identity information for the caller. *)
   type api_gateway_proxy_request_context = {
-    account_id : string; [@key "accountId"]
-    api_id : string; [@key "apiId"] (* The API Gateway REST API ID *)
-    domain_name : string; [@key "domainName"]
-    domain_prefix : string; [@key "domainPrefix"]
+    account_id : string;
+    api_id : string;
+    domain_name : string;
+    domain_prefix : string;
     http : api_gateway_proxy_request_context_http;
-    resource_id : string; [@key "resourceId"]
+    resource_id : string option;
     stage : string;
-    request_id : string; [@key "requestId"]
-    route_key : string; [@key "routeKey"]
+    request_id : string;
+    route_key : string;
     time : string;
-    time_epoch : int64 [@key "timeEpoch"];
+    time_epoch : int64;
     authorizer : api_gateway_proxy_request_context_authorizer option;
   }
 
+  (* A request to API Gateway using the proxy integration (v2).
+
+    This differs from Http.api_gateway_proxy_request in that it
+    does away with multi_value_headers
+  *)
   type api_gateway_proxy_request = {
     version : string;
-    route_key : string; [@key "routeKey"]
-    raw_query_string : string; [@key "rawQueryString"]
+    route_key : string;
+    raw_query_string : string;
     cookies : string list option;
     headers : string StringMap.t;
     query_string_parameters : string StringMap.t;
-        [@key "queryStringParameters"] [@default StringMap.empty]
-    request_context : api_gateway_proxy_request_context; [@key "requestContext"]
+    request_context : api_gateway_proxy_request_context;
     body : string option;
     path_parameters : string StringMap.t;
-        [@key "pathParameters"] [@default StringMap.empty]
-    is_base64_encoded : bool; [@key "isBase64Encoded"]
+    is_base64_encoded : bool;
     stage_variables : string StringMap.t;
-        [@key "stageVariables"] [@default StringMap.empty]
   }
 
   type api_gateway_proxy_response = {
-    status_code : int; [@key "statusCode"]
+    status_code : int;
     headers : string StringMap.t;
     body : string;
-    is_base64_encoded : bool; [@key "isBase64Encoded"]
+    is_base64_encoded : bool;
   }
 
   include
