@@ -134,7 +134,9 @@ let event_response client request_id output =
       request_id
   in
   (make_runtime_post_request client path output |> Lwt_result.catch) >>= function
-  | Ok (response, _) ->
+  | Ok (response, body) ->
+    let open Lwt.Syntax in
+    let* () = Cohttp_lwt.Body.drain_body body in
     let status = response |> Cohttp_lwt_unix.Response.status |> Code.code_of_status in
     if not (Code.is_success status) then
       let error =
@@ -179,7 +181,9 @@ let event_error client request_id err =
       request_id
   in
   (make_runtime_error_request client path err |> Lwt_result.catch) >>= function
-  | Ok (response, _) ->
+  | Ok (response, body) ->
+    let open Lwt.Syntax in
+    let* () = Cohttp_lwt.Body.drain_body body in
     let status = response |> Cohttp_lwt.Response.status |> Code.code_of_status in
     if not (Code.is_success status) then
       let error =
@@ -283,8 +287,10 @@ let next_event client =
   >>= fun () ->
   (Cohttp_lwt_unix.Client.get ~ctx:client.ctx uri |> Lwt_result.catch) >>= function
   | Ok (response, body) ->
+    let open Lwt.Syntax in
     let status = response |> Cohttp_lwt.Response.status |> Code.code_of_status in
     if Code.is_client_error status then
+      let* () = Cohttp_lwt.Body.drain_body body in
       Logs_lwt.err (fun m ->
           m
             "Runtime API returned client error when polling for new events %d\n"
@@ -297,6 +303,7 @@ let next_event client =
       in
       Lwt_result.fail err
     else if Code.is_server_error status then
+      let* () = Cohttp_lwt.Body.drain_body body in
       Logs_lwt.err (fun m ->
           m
             "Runtime API returned HTTP server error when polling for new events %d\n"
@@ -312,6 +319,7 @@ let next_event client =
       let headers = response |> Response.headers in
       match get_event_context headers with
       | Error err ->
+        let* () = Cohttp_lwt.Body.drain_body body in
         Logs_lwt.err (fun m ->
             m "Failed to get event context: %s\n" (Errors.message err))
         >>= fun () -> Lwt_result.fail err
